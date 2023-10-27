@@ -22,6 +22,7 @@ class Sync:
     Sync iterates and receives messages from the Telegram group to the
     local SQLite DB.
     """
+
     config = {}
     db = None
 
@@ -48,17 +49,18 @@ class Sync:
             logging.info("fetching from last message id={}".format(last_id))
         else:
             last_id, last_date = self.db.get_last_message_id()
-            logging.info("fetching from last message id={} ({})".format(
-                last_id, last_date))
+            logging.info(
+                "fetching from last message id={} ({})".format(last_id, last_date)
+            )
 
         group_id = self._get_group_id(group)
 
         n = 0
         while True:
             has = False
-            for m in self._get_messages(group_id,
-                                        offset_id=last_id if last_id else 0,
-                                        ids=ids):
+            for m in self._get_messages(
+                group_id, offset_id=last_id if last_id else 0, ids=ids
+            ):
                 if not m:
                     continue
 
@@ -92,8 +94,11 @@ class Sync:
 
             if has:
                 last_id = m.id
-                logging.info("fetched {} messages. sleeping for {} seconds".format(
-                    n, self.config["fetch_wait"]))
+                logging.info(
+                    "fetched {} messages. sleeping for {} seconds".format(
+                        n, self.config["fetch_wait"]
+                    )
+                )
                 time.sleep(self.config["fetch_wait"])
             else:
                 break
@@ -104,12 +109,18 @@ class Sync:
             self.finish_takeout()
 
         logging.info(
-            "finished. fetched {} messages. last message = {}".format(n, last_date))
+            "finished. fetched {} messages. last message = {}".format(n, last_date)
+        )
 
     def new_client(self, session, config):
         if "proxy" in config and config["proxy"].get("enable"):
             proxy = config["proxy"]
-            client = TelegramClient(session, config["api_id"], config["api_hash"], proxy=(proxy["protocol"], proxy["addr"], proxy["port"]))
+            client = TelegramClient(
+                session,
+                config["api_id"],
+                config["api_hash"],
+                proxy=(proxy["protocol"], proxy["addr"], proxy["port"]),
+            )
         else:
             client = TelegramClient(session, config["api_id"], config["api_hash"])
         # hide log messages
@@ -119,11 +130,13 @@ class Sync:
 
         def patched_info(*args, **kwargs):
             if (
-                args[0] == "File lives in another DC" or
-                args[0] == "Starting direct file download in chunks of %d at %d, stride %d"
+                args[0] == "File lives in another DC"
+                or args[0]
+                == "Starting direct file download in chunks of %d at %d, stride %d"
             ):
                 return client_logger.debug(*args, **kwargs)
             client_logger._info(*args, **kwargs)
+
         client_logger.info = patched_info
 
         # Start client protocol
@@ -139,16 +152,20 @@ class Sync:
                 except errors.TakeoutInitDelayError as e:
                     logging.info(
                         "please allow the data export request received from Telegram on your device. "
-                        "you can also wait for {} seconds.".format(e.seconds))
+                        "you can also wait for {} seconds.".format(e.seconds)
+                    )
                     logging.info(
-                        "press Enter key after allowing the data export request to continue..")
+                        "press Enter key after allowing the data export request to continue.."
+                    )
                     input()
                     logging.info("trying again.. ({})".format(retry + 2))
                 except errors.TakeoutInvalidError:
-                    logging.info("takeout invalidated. delete the session.session file and try again.")
+                    logging.info(
+                        "takeout invalidated. delete the session.session file and try again."
+                    )
             else:
                 logging.info("could not initiate takeout.")
-                raise(Exception("could not initiate takeout."))
+                raise (Exception("could not initiate takeout."))
         else:
             return client
 
@@ -167,11 +184,16 @@ class Sync:
             med = None
             if m.media:
                 # If it's a sticker, get the alt value (unicode emoji).
-                if isinstance(m.media, telethon.tl.types.MessageMediaDocument) and \
-                        hasattr(m.media, "document") and \
-                        m.media.document.mime_type == "application/x-tgsticker":
-                    alt = [a.alt for a in m.media.document.attributes if isinstance(
-                        a, telethon.tl.types.DocumentAttributeSticker)]
+                if (
+                    isinstance(m.media, telethon.tl.types.MessageMediaDocument)
+                    and hasattr(m.media, "document")
+                    and m.media.document.mime_type == "application/x-tgsticker"
+                ):
+                    alt = [
+                        a.alt
+                        for a in m.media.document.attributes
+                        if isinstance(a, telethon.tl.types.DocumentAttributeSticker)
+                    ]
                     if len(alt) > 0:
                         sticker = alt[0]
                 elif isinstance(m.media, telethon.tl.types.MessageMediaPoll):
@@ -184,7 +206,9 @@ class Sync:
             if m.action:
                 if isinstance(m.action, telethon.tl.types.MessageActionChatAddUser):
                     typ = "user_joined"
-                elif isinstance(m.action, telethon.tl.types.MessageActionChatDeleteUser):
+                elif isinstance(
+                    m.action, telethon.tl.types.MessageActionChatDeleteUser
+                ):
                     typ = "user_left"
 
             yield Message(
@@ -193,13 +217,15 @@ class Sync:
                 date=m.date,
                 edit_date=m.edit_date,
                 content=sticker if sticker else m.raw_text,
-                reply_to=m.reply_to_msg_id if m.reply_to and m.reply_to.reply_to_msg_id else None,
+                reply_to=m.reply_to_msg_id
+                if m.reply_to and m.reply_to.reply_to_msg_id
+                else None,
                 user=self._get_user(m.sender) if m.sender else None,
                 media=med,
                 full=m.to_json(),
                 chat_id=group_id,
                 from_chat_id=(
-                    m.fwd_from.from_id.channel_id 
+                    m.fwd_from.from_id.channel_id
                     if m.fwd_from and m.fwd_from.from_id
                     else None
                 ),
@@ -212,15 +238,17 @@ class Sync:
                 wait_time = 0
             else:
                 wait_time = None
-            messages = self.client.get_messages(group, offset_id=offset_id,
-                                                limit=self.config["fetch_batch_size"],
-                                                wait_time=wait_time,
-                                                ids=ids,
-                                                reverse=True)
+            messages = self.client.get_messages(
+                group,
+                offset_id=offset_id,
+                limit=self.config["fetch_batch_size"],
+                wait_time=wait_time,
+                ids=ids,
+                reverse=True,
+            )
             return messages
         except errors.FloodWaitError as e:
-            logging.info(
-                "flood waited: have to wait {} seconds".format(e.seconds))
+            logging.info("flood waited: have to wait {} seconds".format(e.seconds))
 
     def _get_user(self, u) -> User:
         tags = []
@@ -254,8 +282,7 @@ class Sync:
                 fname = self._download_avatar(u)
                 avatar = fname
             except Exception as e:
-                logging.error(
-                    "error downloading avatar: #{}: {}".format(u.id, e))
+                logging.error("error downloading avatar: #{}: {}".format(u.id, e))
 
         return User(
             id=u.id,
@@ -271,15 +298,16 @@ class Sync:
         if not msg.media.results or not msg.media.results.results:
             return None
 
-        options = [{"label": a.text, "count": 0, "correct": False}
-                   for a in msg.media.poll.answers]
+        options = [
+            {"label": a.text, "count": 0, "correct": False}
+            for a in msg.media.poll.answers
+        ]
 
         total = msg.media.results.total_voters
         if msg.media.results.results:
             for i, r in enumerate(msg.media.results.results):
                 options[i]["count"] = r.voters
-                options[i]["percent"] = r.voters / \
-                    total * 100 if total > 0 else 0
+                options[i]["percent"] = r.voters / total * 100 if total > 0 else 0
                 options[i]["correct"] = r.correct
 
         return Media(
@@ -294,40 +322,49 @@ class Sync:
 
     def _get_media(self, msg, group_id):
         res = None
-        if isinstance(msg.media, telethon.tl.types.MessageMediaWebPage) and \
-                not isinstance(msg.media.webpage, telethon.tl.types.WebPageEmpty):
+        if isinstance(
+            msg.media, telethon.tl.types.MessageMediaWebPage
+        ) and not isinstance(msg.media.webpage, telethon.tl.types.WebPageEmpty):
             try:
                 media_file_path = self._download_media(msg, group_id)
-                res =  Media(
+                res = Media(
                     id=msg.id,
                     type="webpage",
                     url=msg.media.webpage.url,
                     title=msg.media.webpage.title,
-                    description=msg.media.webpage.description if msg.media.webpage.description else None,
+                    description=msg.media.webpage.description
+                    if msg.media.webpage.description
+                    else None,
                     thumb=media_file_path,
                     full=msg.media.to_json(),
                 )
             except Exception as e:
-                logging.error(
-                    "error downloading media: #{}: {}".format(msg.id, e)
-                )
-        elif isinstance(msg.media, telethon.tl.types.MessageMediaPhoto) or \
-                isinstance(msg.media, telethon.tl.types.MessageMediaDocument) or \
-                isinstance(msg.media, telethon.tl.types.MessageMediaContact):
+                logging.error("error downloading media: #{}: {}".format(msg.id, e))
+        elif (
+            isinstance(msg.media, telethon.tl.types.MessageMediaPhoto)
+            or isinstance(msg.media, telethon.tl.types.MessageMediaDocument)
+            or isinstance(msg.media, telethon.tl.types.MessageMediaContact)
+        ):
             if self.config["download_media"]:
                 # Filter by extensions?
                 if len(self.config["media_mime_types"]) > 0:
-                    if hasattr(msg, "file") and hasattr(msg.file, "mime_type") and msg.file.mime_type:
+                    if (
+                        hasattr(msg, "file")
+                        and hasattr(msg.file, "mime_type")
+                        and msg.file.mime_type
+                    ):
                         if msg.file.mime_type not in self.config["media_mime_types"]:
                             logging.info(
-                                "skipping media #{} / {}".format(msg.file.name, msg.file.mime_type)
+                                "skipping media #{} / {}".format(
+                                    msg.file.name, msg.file.mime_type
+                                )
                             )
                             return
 
                 logging.info("downloading media #{}".format(msg.id))
                 try:
                     media_file_path = self._download_media(msg, group_id)
-                    res =  Media(
+                    res = Media(
                         id=msg.id,
                         type="photo",
                         url=media_file_path,
@@ -337,9 +374,7 @@ class Sync:
                         full=msg.media.to_json(),
                     )
                 except Exception as e:
-                    logging.error(
-                        "error downloading media: #{}: {}".format(msg.id, e)
-                    )
+                    logging.error("error downloading media: #{}: {}".format(msg.id, e))
         return res
 
     def _download_media(self, msg, group_id) -> [str, str, str]:
@@ -407,7 +442,7 @@ class Sync:
                 full_dialog=dialog.dialog.to_json(),
                 full_entity=dialog.entity.to_json(),
                 username=(
-                    getattr(dialog, "entity", None) 
+                    getattr(dialog, "entity", None)
                     and getattr(dialog.entity, "username", None)
                 ),
             )
@@ -435,8 +470,10 @@ class Sync:
         try:
             entity = self.client.get_entity(group)
         except ValueError:
-            logging.critical("the group: {} does not exist,"
-                             " or the authorized user is not a participant!".format(group))
+            logging.critical(
+                "the group: {} does not exist,"
+                " or the authorized user is not a participant!".format(group)
+            )
             # This is a critical error, so exit with code: 1
             exit(1)
 
@@ -447,8 +484,10 @@ def generate_avarat(one_latter):
     avatar_size = (100, 100)
     # background_color = (255, 0, 255)
     background_color = tuple(random.randint(0, 255) for _ in range(3))
-    avatar = Image.new('RGB', avatar_size, background_color)
+    avatar = Image.new("RGB", avatar_size, background_color)
     # Create a drawing context
     draw = ImageDraw.Draw(avatar)
-    draw.text((30, 25), one_latter.upper(), fill=(0,0,1), font_size=60, align="center")
+    draw.text(
+        (30, 25), one_latter.upper(), fill=(0, 0, 1), font_size=60, align="center"
+    )
     return avatar

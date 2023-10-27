@@ -34,20 +34,18 @@ setup(
     author="Kailash Nadh",
     author_email="",
     url="",
-    packages=['tgarchive'],
+    packages=["tgarchive"],
     install_requires=parse_requirements("requirements.txt"),
     version=get_version(),
     include_package_data=True,
     download_url="",
     license="MIT License",
     entry_points={
-        'console_scripts': [
-            'tg-archive = tgarchive:main'
-        ],
+        "console_scripts": ["tg-archive = tgarchive:main"],
     },
     classifiers=[
         "Topic :: Communications :: Chat",
         "Topic :: Internet :: WWW/HTTP :: Site Management",
-        "Topic :: Documentation"
+        "Topic :: Documentation",
     ],
 )

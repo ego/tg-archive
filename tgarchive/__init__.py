@@ -9,8 +9,7 @@ from .db import DB
 
 __version__ = "1.1.6"
 
-logging.basicConfig(format="%(asctime)s: %(message)s",
-                    level=logging.INFO)
+logging.basicConfig(format="%(asctime)s: %(message)s", level=logging.INFO)
 
 _CONFIG = {
     "api_id": os.getenv("API_ID", ""),
@@ -27,10 +26,8 @@ _CONFIG = {
     "fetch_batch_size": 500,
     "fetch_wait": 5,
     "fetch_limit": 0,
-
     "publish_rss_feed": False,
     "rss_feed_entries": 100,
-
     "publish_dir": "site",
     "site_url": "https://mysite.com",
     "static_dir": "static",
@@ -42,7 +39,7 @@ _CONFIG = {
     "site_name": "@{group} (Telegram) archive",
     "site_description": "Archive of @{group} Telegram messages.",
     "meta_description": "@{group} {date} Telegram message archive.",
-    "page_title": "{date} - @{group} Telegram message archive."
+    "page_title": "{date} - @{group} Telegram message archive.",
 }
 
 
@@ -57,41 +54,110 @@ def main():
     """Run the CLI."""
     p = argparse.ArgumentParser(
         description="A tool for exporting and archiving Telegram groups to webpages.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
 
-    p.add_argument("-c", "--config", action="store", type=str, default="config.yaml",
-                   dest="config", help="path to the config file")
-    p.add_argument("-d", "--data", action="store", type=str, default="data.sqlite",
-                   dest="data", help="path to the SQLite data file to store messages")
-    p.add_argument("-se", "--session", action="store", type=str, default="session.session",
-                   dest="session", help="path to the session file")
-    p.add_argument("-v", "--version", action="store_true", dest="version", help="display version")
+    p.add_argument(
+        "-c",
+        "--config",
+        action="store",
+        type=str,
+        default="config.yaml",
+        dest="config",
+        help="path to the config file",
+    )
+    p.add_argument(
+        "-d",
+        "--data",
+        action="store",
+        type=str,
+        default="data.sqlite",
+        dest="data",
+        help="path to the SQLite data file to store messages",
+    )
+    p.add_argument(
+        "-se",
+        "--session",
+        action="store",
+        type=str,
+        default="session.session",
+        dest="session",
+        help="path to the session file",
+    )
+    p.add_argument(
+        "-v", "--version", action="store_true", dest="version", help="display version"
+    )
 
     n = p.add_argument_group("new")
-    n.add_argument("-n", "--new", action="store_true",
-                   dest="new", help="initialize a new site")
-    n.add_argument("-p", "--path", action="store", type=str, default="example",
-                   dest="path", help="path to create the site")
+    n.add_argument(
+        "-n", "--new", action="store_true", dest="new", help="initialize a new site"
+    )
+    n.add_argument(
+        "-p",
+        "--path",
+        action="store",
+        type=str,
+        default="example",
+        dest="path",
+        help="path to create the site",
+    )
 
     s = p.add_argument_group("sync")
-    s.add_argument("-s", "--sync", action="store_true",
-                   dest="sync", help="sync data from telegram group to the local DB")
-    s.add_argument("-id", "--id", action="store", type=int, nargs="+",
-                   dest="id", help="sync (or update) messages for given ids")
-    s.add_argument("-from-id", "--from-id", action="store", type=int,
-                   dest="from_id", help="sync (or update) messages from this id to the latest")
+    s.add_argument(
+        "-s",
+        "--sync",
+        action="store_true",
+        dest="sync",
+        help="sync data from telegram group to the local DB",
+    )
+    s.add_argument(
+        "-id",
+        "--id",
+        action="store",
+        type=int,
+        nargs="+",
+        dest="id",
+        help="sync (or update) messages for given ids",
+    )
+    s.add_argument(
+        "-from-id",
+        "--from-id",
+        action="store",
+        type=int,
+        dest="from_id",
+        help="sync (or update) messages from this id to the latest",
+    )
 
     b = p.add_argument_group("build")
-    b.add_argument("-b", "--build", action="store_true",
-                   dest="build", help="build the static site")
-    b.add_argument("-t", "--template", action="store", type=str, default="template.html",
-                   dest="template", help="path to the template file")
-    b.add_argument("--rss-template", action="store", type=str, default=None,
-                   dest="rss_template", help="path to the rss template file")
-    b.add_argument("--symlink", action="store_true", dest="symlink", default=True,
-                   help="symlink media and other static files instead of copying")
+    b.add_argument(
+        "-b", "--build", action="store_true", dest="build", help="build the static site"
+    )
+    b.add_argument(
+        "-t",
+        "--template",
+        action="store",
+        type=str,
+        default="template.html",
+        dest="template",
+        help="path to the template file",
+    )
+    b.add_argument(
+        "--rss-template",
+        action="store",
+        type=str,
+        default=None,
+        dest="rss_template",
+        help="path to the rss template file",
+    )
+    b.add_argument(
+        "--symlink",
+        action="store_true",
+        dest="symlink",
+        default=True,
+        help="symlink media and other static files instead of copying",
+    )
 
-    args = p.parse_args(args=None if sys.argv[1:] else ['--help'])
+    args = p.parse_args(args=None if sys.argv[1:] else ["--help"])
 
     if args.version:
         print("v{}".format(__version__))
@@ -107,14 +173,13 @@ def main():
         try:
             shutil.copytree(exdir, args.path)
         except FileExistsError:
-            logging.error(
-                "the directory '{}' already exists".format(args.path))
+            logging.error("the directory '{}' already exists".format(args.path))
             sys.exit(1)
         except:
             raise
 
         logging.info("created directory '{}'".format(args.path))
-        
+
         # make sure the files are writable
         os.chmod(args.path, 0o755)
         for root, dirs, files in os.walk(args.path):
@@ -135,9 +200,11 @@ def main():
         cfg = get_config(args.config)
         mode = "takeout" if cfg.get("use_takeout", False) else "standard"
 
-        logging.info("starting Telegram sync (batch_size={}, limit={}, wait={}, mode={})".format(
-            cfg["fetch_batch_size"], cfg["fetch_limit"], cfg["fetch_wait"], mode
-        ))
+        logging.info(
+            "starting Telegram sync (batch_size={}, limit={}, wait={}, mode={})".format(
+                cfg["fetch_batch_size"], cfg["fetch_limit"], cfg["fetch_wait"], mode
+            )
+        )
 
         try:
             s = Sync(
@@ -163,9 +230,7 @@ def main():
         logging.info("building site")
         config = get_config(args.config)
         b = Build(
-            config,
-            DB(args.data, config["timezone"], config=config),
-            args.symlink
+            config, DB(args.data, config["timezone"], config=config), args.symlink
         )
         b.load_template(args.template)
         if args.rss_template:
