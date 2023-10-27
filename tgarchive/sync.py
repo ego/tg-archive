@@ -6,12 +6,15 @@ import os
 import tempfile
 import shutil
 import time
+import random
 
-from PIL import Image
-from telethon import TelegramClient, errors, sync
+from PIL import Image, ImageDraw, ImageFont
+
 import telethon.tl.types
+from telethon import TelegramClient, errors, sync
+from telethon.tl.functions.messages import ExportChatInviteRequest
 
-from .db import User, Message, Media
+from .db import User, Message, Media, Chat
 
 
 class Sync:
@@ -29,9 +32,9 @@ class Sync:
         self.client = self.new_client(session_file, config)
 
         if not os.path.exists(self.config["media_dir"]):
-            os.mkdir(self.config["media_dir"])
+            os.makedirs(self.config["media_dir"], exist_ok=True)
 
-    def sync(self, ids=None, from_id=None):
+    def sync(self, ids=None, from_id=None, group=None):
         """
         Sync syncs messages from Telegram from the last synced message
         into the local SQLite DB.
@@ -48,7 +51,7 @@ class Sync:
             logging.info("fetching from last message id={} ({})".format(
                 last_id, last_date))
 
-        group_id = self._get_group_id(self.config["group"])
+        group_id = self._get_group_id(group)
 
         n = 0
         while True:
@@ -60,9 +63,9 @@ class Sync:
                     continue
 
                 has = True
-
                 # Insert the records into DB.
-                self.db.insert_user(m.user)
+                if m.user:
+                    self.db.insert_user(m.user)
 
                 if m.media:
                     self.db.insert_media(m.media)
@@ -70,16 +73,23 @@ class Sync:
                 self.db.insert_message(m)
 
                 last_date = m.date
+
                 n += 1
-                if n % 300 == 0:
+                if n % 100 == 0:
                     logging.info("fetched {} messages".format(n))
                     self.db.commit()
+                    time.sleep(random.choice(range(1, 100)) / 50)
+                else:
+                    slp = random.choice(range(1, 100)) / 50
+                    if slp < 0.2:
+                        time.sleep(slp)
 
                 if 0 < self.config["fetch_limit"] <= n or ids:
                     has = False
                     break
 
             self.db.commit()
+
             if has:
                 last_id = m.id
                 logging.info("fetched {} messages. sleeping for {} seconds".format(
@@ -89,8 +99,10 @@ class Sync:
                 break
 
         self.db.commit()
+
         if self.config.get("use_takeout", False):
             self.finish_takeout()
+
         logging.info(
             "finished. fetched {} messages. last message = {}".format(n, last_date))
 
@@ -114,11 +126,13 @@ class Sync:
             client_logger._info(*args, **kwargs)
         client_logger.info = patched_info
 
+        # Start client protocol
         client.start()
+
         if config.get("use_takeout", False):
             for retry in range(3):
                 try:
-                    takeout_client = client.takeout(finalize=True).__enter__()
+                    takeout_client = client.takeout(finalize=True)
                     # check if the takeout session gets invalidated
                     takeout_client.get_messages("me")
                     return takeout_client
@@ -141,11 +155,11 @@ class Sync:
     def finish_takeout(self):
         self.client.__exit__(None, None, None)
 
-    def _get_messages(self, group, offset_id, ids=None) -> Message:
-        messages = self._fetch_messages(group, offset_id, ids)
+    def _get_messages(self, group_id, offset_id, ids=None) -> Message:
+        messages = self._fetch_messages(group_id, offset_id, ids)
         # https://docs.telethon.dev/en/latest/quick-references/objects-reference.html#message
         for m in messages:
-            if not m or not m.sender:
+            if not m:
                 continue
 
             # Media.
@@ -163,7 +177,7 @@ class Sync:
                 elif isinstance(m.media, telethon.tl.types.MessageMediaPoll):
                     med = self._make_poll(m)
                 else:
-                    med = self._get_media(m)
+                    med = self._get_media(m, group_id)
 
             # Message.
             typ = "message"
@@ -180,8 +194,16 @@ class Sync:
                 edit_date=m.edit_date,
                 content=sticker if sticker else m.raw_text,
                 reply_to=m.reply_to_msg_id if m.reply_to and m.reply_to.reply_to_msg_id else None,
-                user=self._get_user(m.sender),
-                media=med
+                user=self._get_user(m.sender) if m.sender else None,
+                media=med,
+                full=m.to_json(),
+                chat_id=group_id,
+                from_chat_id=(
+                    m.fwd_from.from_id.channel_id 
+                    if m.fwd_from and m.fwd_from.from_id
+                    else None
+                ),
+                from_chat=None,
             )
 
     def _fetch_messages(self, group, offset_id, ids=None) -> Message:
@@ -211,7 +233,8 @@ class Sync:
                 first_name=None,
                 last_name=None,
                 tags=tags,
-                avatar=None
+                avatar=None,
+                full=u.to_json(),
             )
 
         if is_normal_user:
@@ -240,7 +263,8 @@ class Sync:
             first_name=u.first_name if is_normal_user else None,
             last_name=u.last_name if is_normal_user else None,
             tags=tags,
-            avatar=avatar
+            avatar=avatar,
+            full=u.to_json(),
         )
 
     def _make_poll(self, msg):
@@ -264,20 +288,29 @@ class Sync:
             url=None,
             title=msg.media.poll.question,
             description=json.dumps(options),
-            thumb=None
+            thumb=None,
+            full=msg.media.to_json(),
         )
 
-    def _get_media(self, msg):
+    def _get_media(self, msg, group_id):
+        res = None
         if isinstance(msg.media, telethon.tl.types.MessageMediaWebPage) and \
                 not isinstance(msg.media.webpage, telethon.tl.types.WebPageEmpty):
-            return Media(
-                id=msg.id,
-                type="webpage",
-                url=msg.media.webpage.url,
-                title=msg.media.webpage.title,
-                description=msg.media.webpage.description if msg.media.webpage.description else None,
-                thumb=None
-            )
+            try:
+                media_file_path = self._download_media(msg, group_id)
+                res =  Media(
+                    id=msg.id,
+                    type="webpage",
+                    url=msg.media.webpage.url,
+                    title=msg.media.webpage.title,
+                    description=msg.media.webpage.description if msg.media.webpage.description else None,
+                    thumb=media_file_path,
+                    full=msg.media.to_json(),
+                )
+            except Exception as e:
+                logging.error(
+                    "error downloading media: #{}: {}".format(msg.id, e)
+                )
         elif isinstance(msg.media, telethon.tl.types.MessageMediaPhoto) or \
                 isinstance(msg.media, telethon.tl.types.MessageMediaDocument) or \
                 isinstance(msg.media, telethon.tl.types.MessageMediaContact):
@@ -287,48 +320,41 @@ class Sync:
                     if hasattr(msg, "file") and hasattr(msg.file, "mime_type") and msg.file.mime_type:
                         if msg.file.mime_type not in self.config["media_mime_types"]:
                             logging.info(
-                                "skipping media #{} / {}".format(msg.file.name, msg.file.mime_type))
+                                "skipping media #{} / {}".format(msg.file.name, msg.file.mime_type)
+                            )
                             return
 
                 logging.info("downloading media #{}".format(msg.id))
                 try:
-                    basename, fname, thumb = self._download_media(msg)
-                    return Media(
+                    media_file_path = self._download_media(msg, group_id)
+                    res =  Media(
                         id=msg.id,
                         type="photo",
-                        url=fname,
-                        title=basename,
+                        url=media_file_path,
+                        title=media_file_path,
                         description=None,
-                        thumb=thumb
+                        thumb=media_file_path,
+                        full=msg.media.to_json(),
                     )
                 except Exception as e:
                     logging.error(
-                        "error downloading media: #{}: {}".format(msg.id, e))
+                        "error downloading media: #{}: {}".format(msg.id, e)
+                    )
+        return res
 
-    def _download_media(self, msg) -> [str, str, str]:
-        """
-        Download a media / file attached to a message and return its original
-        filename, sanitized name on disk, and the thumbnail (if any). 
-        """
-        # Download the media to the temp dir and copy it back as
-        # there does not seem to be a way to get the canonical
-        # filename before the download.
-        fpath = self.client.download_media(msg, file=tempfile.gettempdir())
-        basename = os.path.basename(fpath)
-
-        newname = "{}.{}".format(msg.id, self._get_file_ext(basename))
-        shutil.move(fpath, os.path.join(self.config["media_dir"], newname))
-
-        # If it's a photo, download the thumbnail.
-        tname = None
-        if isinstance(msg.media, telethon.tl.types.MessageMediaPhoto):
-            tpath = self.client.download_media(
-                msg, file=tempfile.gettempdir(), thumb=1)
-            tname = "thumb_{}.{}".format(
-                msg.id, self._get_file_ext(os.path.basename(tpath)))
-            shutil.move(tpath, os.path.join(self.config["media_dir"], tname))
-
-        return basename, newname, tname
+    def _download_media(self, msg, group_id) -> [str, str, str]:
+        media_path = os.path.join(
+            self.config["media_dir"],
+            "chats",
+            f"{group_id}",
+            f"{msg.id}",
+        )
+        # with tempfile.TemporaryDirectory() as tmpdirname:
+        file_path = self.client.download_media(msg)
+        if file_path:
+            os.makedirs(media_path, exist_ok=True)
+            media_file_path = shutil.move(file_path, media_path)
+            return media_file_path
 
     def _get_file_ext(self, f) -> str:
         if "." in f:
@@ -339,26 +365,57 @@ class Sync:
         return ".file"
 
     def _download_avatar(self, user):
-        fname = "avatar_{}.jpg".format(user.id)
-        fpath = os.path.join(self.config["media_dir"], fname)
+        media_dir_path = os.path.join(
+            self.config["media_dir"],
+            "users",
+            f"{user.id}",
+        )
+        media_file_path = os.path.join(
+            media_dir_path,
+            f"{user.username}.png",
+        )
 
-        if os.path.exists(fpath):
-            return fname
+        if os.path.exists(media_file_path):
+            return media_file_path
 
-        logging.info("downloading avatar #{}".format(user.id))
+        photo_file_path = self.client.download_profile_photo(user, file=media_file_path)
+        logging.info("download profile photo %s", photo_file_path)
 
-        # Download the file into a container, resize it, and then write to disk.
-        b = BytesIO()
-        profile_photo = self.client.download_profile_photo(user, file=b)
-        if profile_photo is None:
-            logging.info("user has no avatar #{}".format(user.id))
-            return None
+        if not photo_file_path:
+            avatar = generate_avarat(user.first_name[0] if user.first_name else "N")
+            os.makedirs(media_dir_path, exist_ok=True)
+            avatar.save(media_file_path)
+            return media_file_path
+        return photo_file_path
 
-        im = Image.open(b)
-        im.thumbnail(self.config["avatar_size"], Image.LANCZOS)
-        im.save(fpath, "JPEG")
+    def init_get_and_save_dialogs(self):
+        # Get all dialogs for the authorized user, which also
+        # syncs the entity cache to get latest entities
+        # ref: https://docs.telethon.dev/en/latest/concepts/entities.html#getting-entities
+        dialogs = self.client.get_dialogs()
+        for dialog in dialogs:
+            chat = Chat(
+                id=dialog.id,
+                date=dialog.date,
+                archived=dialog.archived,
+                is_channel=dialog.is_channel,
+                is_group=dialog.is_group,
+                is_user=dialog.is_user,
+                name=dialog.name,
+                title=dialog.title,
+                pinned=dialog.pinned,
+                full_dialog=dialog.dialog.to_json(),
+                full_entity=dialog.entity.to_json(),
+                username=(
+                    getattr(dialog, "entity", None) 
+                    and getattr(dialog.entity, "username", None)
+                ),
+            )
+            self.db.insert_chat(chat)
 
-        return fname
+        self.db.commit()
+        time.sleep(random.choice(range(1, 100)) / 70)
+        logging.info("saved dialogs %s", len(dialogs))
 
     def _get_group_id(self, group):
         """
@@ -367,11 +424,6 @@ class Sync:
 
         The authorized user must be a part of the group.
         """
-        # Get all dialogs for the authorized user, which also
-        # syncs the entity cache to get latest entities
-        # ref: https://docs.telethon.dev/en/latest/concepts/entities.html#getting-entities
-        _ = self.client.get_dialogs()
-
         try:
             # If the passed group is a group ID, extract it.
             group = int(group)
@@ -389,3 +441,14 @@ class Sync:
             exit(1)
 
         return entity.id
+
+
+def generate_avarat(one_latter):
+    avatar_size = (100, 100)
+    # background_color = (255, 0, 255)
+    background_color = tuple(random.randint(0, 255) for _ in range(3))
+    avatar = Image.new('RGB', avatar_size, background_color)
+    # Create a drawing context
+    draw = ImageDraw.Draw(avatar)
+    draw.text((30, 25), one_latter.upper(), fill=(0,0,1), font_size=60, align="center")
+    return avatar

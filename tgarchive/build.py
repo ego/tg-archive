@@ -1,4 +1,5 @@
 from collections import OrderedDict, deque
+from datetime import datetime
 import logging
 import math
 import os
@@ -6,6 +7,7 @@ import pkg_resources
 import re
 import shutil
 import magic
+import pytz
 
 from feedgen.feed import FeedGenerator
 from jinja2 import Template
@@ -84,8 +86,9 @@ class Build:
                 if self.config["publish_rss_feed"]:
                     rss_entries.extend(messages)
 
-                self._render_page(messages, month, dayline,
-                                  fname, page, total_pages)
+                self._render_page(
+                    messages, month, dayline, fname, page, total_pages
+                )
 
         # The last page chronologically is the latest page. Make it index.
         if fname:
@@ -101,11 +104,15 @@ class Build:
 
     def load_template(self, fname):
         with open(fname, "r") as f:
-            self.template = Template(f.read(), autoescape=True)
+            self.template = Template(
+                f.read(), autoescape=True,
+            )
 
     def load_rss_template(self, fname):
         with open(fname, "r") as f:
-            self.rss_template = Template(f.read(), autoescape=True)
+            self.rss_template = Template(
+                f.read(), autoescape=True,
+            )
 
     def make_filename(self, month, page) -> str:
         fname = "{}{}.html".format(
@@ -113,16 +120,23 @@ class Build:
         return fname
 
     def _render_page(self, messages, month, dayline, fname, page, total_pages):
-        html = self.template.render(config=self.config,
-                                    timeline=self.timeline,
-                                    dayline=dayline,
-                                    month=month,
-                                    messages=messages,
-                                    page_ids=self.page_ids,
-                                    pagination={"current": page,
-                                                "total": total_pages},
-                                    make_filename=self.make_filename,
-                                    nl2br=self._nl2br)
+        chats = list(self.db.get_groups(self.config["group"]))
+        html = self.template.render(
+            chats=chats,
+            config=self.config,
+            timeline=self.timeline,
+            dayline=dayline,
+            month=month,
+            messages=messages,
+            page_ids=self.page_ids,
+            pagination={
+                "current": page,
+                "total": total_pages,
+            },
+            make_filename=self.make_filename,
+            nl2br=self._nl2br,
+            format_date=self._format_date,
+        )
 
         with open(os.path.join(self.config["publish_dir"], fname), "w", encoding="utf8") as f:
             f.write(html)
@@ -133,7 +147,11 @@ class Build:
         f.generator(
             "tg-archive {}".format(pkg_resources.get_distribution("tg-archive").version))
         f.link(href=self.config["site_url"], rel="alternate")
-        f.title(self.config["site_name"].format(group=self.config["group"]))
+        f.title(
+            self.config["site_name"].format(
+                group=",".join(self.config["group"])
+            )
+        )
         f.subtitle(self.config["site_description"])
 
         for m in messages:
@@ -177,7 +195,8 @@ class Build:
                                             m=m,
                                             media_mime=media_mime,
                                             page_ids=self.page_ids,
-                                            nl2br=self._nl2br)
+                                            nl2br=self._nl2br,
+                                            format_date=self._format_date)
         out = m.content
         if not out and m.media:
             out = m.media.title
@@ -187,6 +206,16 @@ class Build:
         # There has to be a \n before <br> so as to not break
         # Jinja's automatic hyperlinking of URLs.
         return _NL2BR.sub("\n\n", s).replace("\n", "\n<br />")
+
+    def _format_date(self, mdate) -> str:
+        tz = self.config.get("view_timezone")
+
+        if isinstance(mdate, str):
+            mdate = datetime.fromisoformat(mdate)
+
+        if tz:
+            return mdate.astimezone(pytz.timezone(tz)).strftime("%H:%M %d.%m.%y")
+        return mdate.strftime("%H:%M %d.%m.%y")
 
     def _create_publish_dir(self):
         pubdir = self.config["publish_dir"]

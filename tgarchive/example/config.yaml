@@ -10,12 +10,12 @@ api_hash: "your_api_hash"
 # Your user account that was used to creat the API ID should 
 # be a member of this group.
 
-group: "your_group_name or your_group_username or your_group_id(a negative number)"
+group: ["-100_group_group"]
 
 # Avatars and media will be downloaded into media_dir.
 download_media: True
 download_avatars: True
-avatar_size: [64, 64] # Width, Height.
+avatar_size: [128, 128] # Width, Height.
 media_dir: "media"
 
 # The list of media/file mime types (in lowercase) to download.
@@ -39,7 +39,7 @@ proxy:
 # These should be configured carefully to not get rate limited by Telegram.
 # Number of messages to fetch in one batch.
 # For takeout mode (use_takeout: True), this value can be greater.
-fetch_batch_size: 2000
+fetch_batch_size: 500
 
 # Seconds to wait after fetching one full batch and moving on to the next one.
 fetch_wait: 5
@@ -59,19 +59,21 @@ telegram_url: "https://t.me/{id}"
 
 # IMPORTANT: Telegram shows the full name on your (API key holder's)
 # phonebook for users who are in your phonebook.
-show_sender_fullname: False
+show_sender_fullname: True
 
 # Timezone to apply on timestamps when building the site. If no value
 # is specified, all timestamps are in UTC:
 # Eg: US/Eastern  Asia/Kolkata
 timezone: ""
+view_timezone: "US/Eastern"
+database_backup_dir: "database_backup"
 
-publish_rss_feed: True
+publish_rss_feed: False
 rss_feed_entries: 100 # Show Latest N messages in the RSS feed.
 
 # Root URL where the site will be hosted. No trailing slash.
-site_url: "https://mysite.com"
+site_url: "https://localhost"
 site_name: "@{group} - Telegram group archive"
-site_description: "Public archive of Telegram messages."
+site_description: "Archive of Telegram messages."
 meta_description: "@{group} {date} - Telegram message archive."
 page_title: "Page {page} - {date} @{group} Telegram message archive."

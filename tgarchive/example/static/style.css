@@ -233,15 +233,15 @@ div.body > div.text {
 	}
 	.messages .avatar {
 		background: #eee;
-		width: 24px;
-		height: 24px;
+		width: 44px;
+		height: 44px;
 		border-radius: 100%;
 		overflow: none;
 		margin: -2px 15px 0 0;
 	}
 		.messages .avatar img {
-			width: 24px;
-			height: 24px;
+			width: 44px;
+			height: 44px;
 			overflow: hidden;
 			border-radius: 100%;
 		}
@@ -279,7 +279,7 @@ div.body > div.text {
 	}
 		.messages .media .thumb {
 			max-width: 100%;
-			max-height: 150px;
+			max-height: auto;
 			width: auto;
 		}
 		.messages .media video {

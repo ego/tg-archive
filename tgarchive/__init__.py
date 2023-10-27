@@ -7,7 +7,7 @@ import yaml
 
 from .db import DB
 
-__version__ = "1.1.3"
+__version__ = "1.1.6"
 
 logging.basicConfig(format="%(asctime)s: %(message)s",
                     level=logging.INFO)
@@ -15,20 +15,20 @@ logging.basicConfig(format="%(asctime)s: %(message)s",
 _CONFIG = {
     "api_id": os.getenv("API_ID", ""),
     "api_hash": os.getenv("API_HASH", ""),
-    "group": "",
-    "download_avatars": True,
+    "group": [],
+    "download_avatars": False,
     "avatar_size": [64, 64],
-    "download_media": False,
+    "download_media": True,
     "media_dir": "media",
     "media_mime_types": [],
     "proxy": {
         "enable": False,
     },
-    "fetch_batch_size": 2000,
+    "fetch_batch_size": 500,
     "fetch_wait": 5,
     "fetch_limit": 0,
 
-    "publish_rss_feed": True,
+    "publish_rss_feed": False,
     "rss_feed_entries": 100,
 
     "publish_dir": "site",
@@ -38,8 +38,9 @@ _CONFIG = {
     "per_page": 1000,
     "show_sender_fullname": False,
     "timezone": "",
+    "database_backup_dir": "database_backup",
     "site_name": "@{group} (Telegram) archive",
-    "site_description": "Public archive of @{group} Telegram messages.",
+    "site_description": "Archive of @{group} Telegram messages.",
     "meta_description": "@{group} {date} Telegram message archive.",
     "page_title": "{date} - @{group} Telegram message archive."
 }
@@ -87,7 +88,7 @@ def main():
                    dest="template", help="path to the template file")
     b.add_argument("--rss-template", action="store", type=str, default=None,
                    dest="rss_template", help="path to the rss template file")
-    b.add_argument("--symlink", action="store_true", dest="symlink",
+    b.add_argument("--symlink", action="store_true", dest="symlink", default=True,
                    help="symlink media and other static files instead of copying")
 
     args = p.parse_args(args=None if sys.argv[1:] else ['--help'])
@@ -137,9 +138,16 @@ def main():
         logging.info("starting Telegram sync (batch_size={}, limit={}, wait={}, mode={})".format(
             cfg["fetch_batch_size"], cfg["fetch_limit"], cfg["fetch_wait"], mode
         ))
+
         try:
-            s = Sync(cfg, args.session, DB(args.data))
-            s.sync(args.id, args.from_id)
+            s = Sync(
+                cfg,
+                args.session,
+                DB(args.data, config=cfg, sync=True),
+            )
+            s.init_get_and_save_dialogs()
+            for group in cfg["group"]:
+                s.sync(args.id, args.from_id, group)
         except KeyboardInterrupt as e:
             logging.info("sync cancelled manually")
             if cfg.get("use_takeout", False):
@@ -154,7 +162,11 @@ def main():
 
         logging.info("building site")
         config = get_config(args.config)
-        b = Build(config, DB(args.data, config["timezone"]), args.symlink)
+        b = Build(
+            config,
+            DB(args.data, config["timezone"], config=config),
+            args.symlink
+        )
         b.load_template(args.template)
         if args.rss_template:
             b.load_rss_template(args.rss_template)

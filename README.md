@@ -1,8 +1,6 @@
+# tg-archive keep your Telegram group, chats, chanels data on-premises.
 
-![favicon](https://user-images.githubusercontent.com/547147/111869334-eb48f100-89a4-11eb-9c0c-bc74cdee197a.png)
-
-
-**tg-archive** is a tool for exporting Telegram group chats into static websites, preserving chat history like mailing list archives.
+**tg-archive** is a tool for exporting Telegram group chats into static websites, preserving chat history like local archives.
 
 
 ## Preview
@@ -32,7 +30,15 @@ tg-archive uses the [Telethon](https://github.com/LonamiWebs/Telethon) Telegram 
 
 ### Usage
 
-1. `tg-archive --new --path=mysite` (creates a new site. `cd` into mysite and edit `config.yaml`).
+From source
+
+1. `python3 -m venv .venv`
+2. `. .venv/bin/activate`
+3. `python3 -m pip install -e .`
+
+From PyPi
+
+1. `tg-archive --new --path=telegram` (creates a new site. `cd` into `telegram/` and edit `config.yaml`).
 1. `tg-archive --sync` (syncs data into `data.sqlite`).
   Note: First time connection will prompt for your phone number + a Telegram auth code sent to the app. On successful auth, a `session.session` file is created. DO NOT SHARE this session file publicly as it contains the API autorization for your account.
 1. `tg-archive --build` (builds the static site into the `site` directory, which can be published)
