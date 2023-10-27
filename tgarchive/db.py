@@ -159,15 +159,17 @@ class DB:
     def _parse_date(self, d) -> str:
         return datetime.strptime(d, "%Y-%m-%dT%H:%M:%S%z")
 
-    def get_last_message_id(self) -> [int, datetime]:
+    def get_last_message_id(self, group) -> [int, datetime]:
         cur = self.conn.cursor()
         cur.execute(
             """
             SELECT id, strftime('%Y-%m-%d 00:00:00', date) as "[timestamp]" 
             FROM messages
-            ORDER BY id 
-            DESC LIMIT 1
-        """
+            WHERE chat_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+        """,
+            (group,),
         )
         res = cur.fetchone()
         if not res:

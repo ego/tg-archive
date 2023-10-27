@@ -41,25 +41,36 @@ class Sync:
         into the local SQLite DB.
         """
 
+        logging.info("======== get entity group %s ========", group)
+        group_id = self._get_group_id(group)
+
+        logging.info("processing group=%s group_id=%s", group, group_id)
+
         if ids:
             last_id, last_date = (ids, None)
-            logging.info("fetching message id={}".format(ids))
+            logging.info("for group_id={} fetching message id={}".format(group_id, ids))
         elif from_id:
             last_id, last_date = (from_id, None)
-            logging.info("fetching from last message id={}".format(last_id))
-        else:
-            last_id, last_date = self.db.get_last_message_id()
             logging.info(
-                "fetching from last message id={} ({})".format(last_id, last_date)
+                "for group_id={} fetching from last message id={}".format(
+                    group_id, last_id
+                )
             )
-
-        group_id = self._get_group_id(group)
+        else:
+            last_id, last_date = self.db.get_last_message_id(group_id)
+            logging.info(
+                "for group_id={} fetching from last message id={} ({})".format(
+                    group_id, last_id, last_date
+                )
+            )
 
         n = 0
         while True:
             has = False
             for m in self._get_messages(
-                group_id, offset_id=last_id if last_id else 0, ids=ids
+                group_id,
+                offset_id=last_id if last_id else 0,
+                ids=ids,
             ):
                 if not m:
                     continue
@@ -78,7 +89,9 @@ class Sync:
 
                 n += 1
                 if n % 100 == 0:
-                    logging.info("fetched {} messages".format(n))
+                    logging.info(
+                        "for group_id={} fetched {} messages".format(group_id, n)
+                    )
                     self.db.commit()
                     time.sleep(random.choice(range(1, 100)) / 50)
                 else:
@@ -95,8 +108,8 @@ class Sync:
             if has:
                 last_id = m.id
                 logging.info(
-                    "fetched {} messages. sleeping for {} seconds".format(
-                        n, self.config["fetch_wait"]
+                    "for group_id={} fetched {} messages. sleeping for {} seconds".format(
+                        group_id, n, self.config["fetch_wait"]
                     )
                 )
                 time.sleep(self.config["fetch_wait"])
@@ -109,7 +122,9 @@ class Sync:
             self.finish_takeout()
 
         logging.info(
-            "finished. fetched {} messages. last message = {}".format(n, last_date)
+            "Finished. for group_id={} fetched total {} messages. last message = {}".format(
+                group_id, n, last_date
+            )
         )
 
     def new_client(self, session, config):
@@ -432,6 +447,9 @@ class Sync:
         # Get all dialogs for the authorized user, which also
         # syncs the entity cache to get latest entities
         # ref: https://docs.telethon.dev/en/latest/concepts/entities.html#getting-entities
+
+        logging.info("======== get initial dialogs ========")
+
         dialogs = self.client.get_dialogs()
         for dialog in dialogs:
             chat = Chat(
