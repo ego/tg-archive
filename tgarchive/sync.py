@@ -225,7 +225,7 @@ class Sync:
                 full=m.to_json(),
                 chat_id=group_id,
                 from_chat_id=(
-                    m.fwd_from.from_id.channel_id
+                    getattr(m.fwd_from.from_id, "channel_id", None)
                     if m.fwd_from and m.fwd_from.from_id
                     else None
                 ),
@@ -384,7 +384,12 @@ class Sync:
             f"{group_id}",
             f"{msg.id}",
         )
-        # with tempfile.TemporaryDirectory() as tmpdirname:
+
+        if os.path.exists(media_path):
+            present_file = get_first_non_hidden_file(media_path)
+            if present_file:
+                return os.path.join(media_path, present_file)
+
         file_path = self.client.download_media(msg)
         if file_path:
             os.makedirs(media_path, exist_ok=True)
@@ -491,3 +496,9 @@ def generate_avarat(one_latter):
         (30, 25), one_latter.upper(), fill=(0, 0, 1), font_size=60, align="center"
     )
     return avatar
+
+
+def get_first_non_hidden_file(directory):
+    for filename in os.listdir(directory):
+        if not filename.startswith("."):
+            return filename
