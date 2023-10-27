@@ -1,0 +1,20 @@
+[tool.black]
+line-length = 79
+target-version = ['py38']
+verbose = false
+exclude = '''
+/(
+    \.git
+  | \.mypy_cache
+  | \.pytest_cache
+  | \.venv
+  | build
+  | dist
+  | node_modules
+  | docs
+  | cdk.out
+  | docker
+  | telegram
+  | requirements
+)/
+'''

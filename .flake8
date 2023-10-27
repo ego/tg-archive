@@ -1,0 +1,7 @@
+[flake8]
+ignore = D100,D101,D104,D105,D106,D403,D103,A003,E501,D102,D107,C901,W503,A002,E203
+max-line-length = 79
+max-complexity = 12
+show-source = True
+statistics = True
+inline-quotes = "
