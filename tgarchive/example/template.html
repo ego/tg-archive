@@ -191,7 +191,13 @@
                                 <div class="text">
                                     {% if m.type == "message" %}
                                     {% if not m.content %}
+
+                                        {% if m.full.action %}
+                                            {{ m.full.action._ }}<br/>
+                                        {% endif %}
+
                                         {{ m.full }}
+
                                     {% else %}
                                         {{ nl2br(m.content | escape) | safe | urlize }}
                                     {% endif %}
@@ -205,9 +211,9 @@
                                         {% endif %}
                                     {% elif m.type == "user_left" %}
                                         Left
-                                        {% if m.full.action and m.full.action.users %}
+                                        {% if m.full.action and m.full.action.user_id %}
                                             {{ m.full.action._ }}
-                                            {{ m.full.action.users | join(",") }}
+                                            {{ m.full.action.user_id }}
                                         {% endif %}
                                     {% endif %}
                                 {% endif %}
