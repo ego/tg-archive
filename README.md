@@ -39,9 +39,11 @@ To use this updated version install it from source
 ### Usage
 
 1. `tg-archive --new --path=telegram` (creates a new site. `cd` into `telegram/` and edit `config.yaml`).
-1. `tg-archive --sync` (syncs data into `data.sqlite`).
+2. `cd telegram`
+3. `tg-archive --sync` (syncs data into `data.sqlite`).
   Note: First time connection will prompt for your phone number + a Telegram auth code sent to the app. On successful auth, a `session.session` file is created. DO NOT SHARE this session file publicly as it contains the API authorization for your account.
-1. `tg-archive --build` (builds the static site into the `site` directory, which can be published)
+4. `tg-archive --build` (builds the static site into the `site` directory, which can be published)
+5. `open site/index.html`
 
 ### Customization
 Edit the generated `template.html` and static assets in the `./static` directory to customize the site.
